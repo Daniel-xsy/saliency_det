@@ -1,15 +1,19 @@
 import os
+import pickle
 from PIL import Image
 
 from torch.utils.data import Dataset
 
 
-# DEFAULT_PATH = {'mdfa_test': 'E:\Infrared Small Target Dataset\MDvsFA_test',
-#                 'mdfa_train': 'E:\Infrared Small Target Dataset\MDvsFA_train',
-#                 'sirst': 'E:\Infrared Small Target Dataset\Sirst_test'}
+DEFAULT_PATH = {'mdfa_test': 'E:\Infrared Small Target Dataset\MDvsFA_test',
+                'mdfa_train': 'E:\Infrared Small Target Dataset\MDvsFA_train',
+                'sirst': 'E:\Infrared Small Target Dataset\Sirst_test'}
+'''
 DEFAULT_PATH = {'mdfa_test': '../data/Infrared Small Target Dataset/MDvsFA_test',
                 'mdfa_train': '../data/Infrared Small Target Dataset/MDvsFA_train',
                 'sirst': '../data/Infrared Small Target Dataset/Sirst_test'}
+'''
+
 
 
 class MDFADataset(Dataset):
@@ -25,11 +29,18 @@ class MDFADataset(Dataset):
             self._parser_test_folder()
 
     def _parser_train_folder(self):
-        files_all = os.listdir(self.root)
-        self.x_files = [file for file in files_all if file[7] == '1']
-        self.y_files = [file for file in files_all if file[7] == '2']
-        self.x_files.sort(key=lambda x:int(x.split('_')[0]))
-        self.y_files.sort(key=lambda x:int(x.split('_')[0]))
+        if os.path.exists('./img_file_list.pkl'):
+            with open('./img_file_list.pkl', 'rb') as f:
+                save_cache = pickle.load(f)
+                self.x_files = save_cache["train_x"]
+                self.y_files = save_cache["train_y"]
+
+        else:
+            files_all = os.listdir(self.root)
+            self.x_files = [file for file in files_all if file[7] == '1']
+            self.y_files = [file for file in files_all if file[7] == '2']
+            self.x_files.sort(key=lambda x:int(x.split('_')[0]))
+            self.y_files.sort(key=lambda x:int(x.split('_')[0]))
 
     def _parser_test_folder(self):
         x_files = os.listdir(os.path.join(self.root, 'test_org'))
