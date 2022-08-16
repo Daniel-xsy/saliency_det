@@ -4,9 +4,12 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 
-DEFAULT_PATH = {'mdfa_test': 'E:\Infrared Small Target Dataset\MDvsFA_test',
-                'mdfa_train': 'E:\Infrared Small Target Dataset\MDvsFA_train',
-                'sirst': 'E:\Infrared Small Target Dataset\Sirst_test'}
+# DEFAULT_PATH = {'mdfa_test': 'E:\Infrared Small Target Dataset\MDvsFA_test',
+#                 'mdfa_train': 'E:\Infrared Small Target Dataset\MDvsFA_train',
+#                 'sirst': 'E:\Infrared Small Target Dataset\Sirst_test'}
+DEFAULT_PATH = {'mdfa_test': '../data/Infrared Small Target Dataset/MDvsFA_test',
+                'mdfa_train': '../data/Infrared Small Target Dataset/MDvsFA_train',
+                'sirst': '../data/Infrared Small Target Dataset/Sirst_test'}
 
 
 class MDFADataset(Dataset):

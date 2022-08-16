@@ -36,19 +36,21 @@ def get_args_parser():
     parser.add_argument('--eval', action='store_true', default=False, help='Only for evaluation')
    
     return parser
-
+    
 
 def main(args):
 
     transforms = tfs.Compose([
         tfs.Resize((args.input_size, args.input_size)),
         tfs.CenterCrop((args.input_size, args.input_size)),
+        tfs.Grayscale(num_output_channels=1),
         tfs.ToTensor(),
         tfs.Normalize(mean=0.5, std=0.5)
     ])
     target_transforms = tfs.Compose([
         tfs.Resize((args.input_size, args.input_size)),
         tfs.CenterCrop((args.input_size, args.input_size)),
+        tfs.Grayscale(num_output_channels=1),
         tfs.ToTensor()
     ])
 
@@ -69,6 +71,11 @@ def main(args):
 
     model = UNet(input_size=args.input_size, emb_dim=args.emb_dim)
     model = model.to(device)
+
+    if args.eval:
+        eval_stat = evaluate(testloader, model, device)
+        print(eval_stat)
+        exit(0)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
     scheduler = utils.cosine_lr(optimizer, args.lr, args.warmup, args.epochs)

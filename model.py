@@ -80,7 +80,7 @@ class UNet(nn.Module):
 
         self.position_embedding = nn.Parameter(torch.randn((input_size//8)**2, emb_dim))
 
-        self.encoder_1 = ResNetBlock(in_chans=3, out_chans=64)
+        self.encoder_1 = ResNetBlock(in_chans=1, out_chans=64)
         self.encoder_2 = nn.Sequential(
             DownSampling(k=2, s=2),
             ResNetBlock(in_chans=64, out_chans=128))
