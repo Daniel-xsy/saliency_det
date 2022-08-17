@@ -4,17 +4,13 @@ import torch
 import torch.nn as nn
 
 
-def miss_detection_rate(output, target, thre=0.5):
-    out_bin = output > thre
-    gt_bin = target > thre
-    mdr = torch.sum(gt_bin * ~out_bin) / max(1, torch.sum(gt_bin))
+def miss_detection_rate(output, target):
+    mdr = torch.sum(target * (1 - output)) / max(1, torch.sum(target))
     return mdr
 
 
-def false_alarm_rate(output, target, thre=0.5):
-    out_bin = output > thre
-    gt_bin = target > thre
-    far = torch.sum(~gt_bin * out_bin) / max(1, torch.sum(out_bin))
+def false_alarm_rate(output, target):
+    far = torch.sum((1- target) * output) / max(1, torch.sum(output))
     return far
 
 
