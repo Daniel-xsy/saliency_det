@@ -1,16 +1,19 @@
-from turtle import forward
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 def miss_detection_rate(output, target):
-    mdr = torch.sum(target * (1 - output)) / max(1, torch.sum(target))
+    output = output * target
+    mdr = torch.sum(1 - output) / max(1, torch.sum(target))
     return mdr
 
 
 def false_alarm_rate(output, target):
-    far = torch.sum((1- target) * output) / max(1, torch.sum(output))
+    no_object_mask = 1 - target
+    output = output * no_object_mask
+    far = torch.sum(output) / max(1, torch.sum(1 - target))
     return far
 
 
