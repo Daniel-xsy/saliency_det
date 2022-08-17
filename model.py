@@ -45,8 +45,7 @@ class CAN(nn.Module):
     def forward(self, x):
         x = self.blocks(x)
         x = self.linear_head(x)
-        # binary segmentation result
-        return ((x - 0.5).sign() + 1) / 2
+        return x
 
 class Discriminator(nn.Module):
     def __init__(self, emb_dims=128):
