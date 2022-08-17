@@ -3,6 +3,7 @@ from tqdm import tqdm
 from typing import Iterable
 
 import torch
+import torch.nn.functional as F
 
 import utils
 
@@ -41,7 +42,7 @@ def train_one_epoch(G1: torch.nn.Module, G2: torch.nn.Module, D: torch.nn.Module
         ## Train Discriminator
         optimizer_D.zero_grad()
 
-        loss_D = torch.mean(logits1) + torch.mean(logits2) - torch.mean(logits_gt)
+        loss_D = torch.mean(torch.log(logits1)) + torch.mean(torch.log(logits2)) - torch.mean(torch.log(logits_gt))
         loss_D_all.update(loss_D.item(), batchsize/args.batch_size)
 
         loss_D.backward()
@@ -59,10 +60,9 @@ def train_one_epoch(G1: torch.nn.Module, G2: torch.nn.Module, D: torch.nn.Module
             optimizer_G1.zero_grad()
             optimizer_G2.zero_grad()
 
-
-            loss_G = -(torch.mean(logits1) + torch.mean(logits2))
-            loss_c = args.loss_alpha1 * con_loss(feat1, feat2)
-            loss_d = args.loss_alpha2 * data_loss(fake1, fake2, target)
+            loss_G = args.loss_alpha2 * torch.mean(1 - torch.log(logits1) + 1 - torch.log(logits2))
+            loss_c = con_loss(feat1, feat2)
+            loss_d = args.loss_alpha1 * data_loss(fake1, fake2, target)
 
             loss_all = loss_G + loss_c + loss_d
 

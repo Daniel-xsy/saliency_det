@@ -12,13 +12,9 @@ class ConvBlock(nn.Module):
         self.conv = nn.Conv2d(in_chans, out_chans, kernel_size=kernel_size, stride=stride, padding=padding)
         self.bn = nn.BatchNorm2d(out_chans)
         self.act = nn.LeakyReLU(negative_slope=0.2)
-        if in_chans == out_chans:
-            self.shortcut = nn.Identity()
-        else:
-            self.shortcut = nn.Conv2d(in_chans, out_chans, kernel_size, stride=stride, padding=padding)
 
     def forward(self, x):
-        return self.shortcut(x) + self.act(self.bn(self.conv(x)))
+        return self.act(self.bn(self.conv(x)))
 
 
 class CANBlock(nn.Module):
@@ -28,13 +24,9 @@ class CANBlock(nn.Module):
         self.conv = nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=dilation, dilation=dilation)
         self.bn = nn.BatchNorm2d(out_chans)
         self.act = nn.LeakyReLU(negative_slope=0.2)
-        if in_chans == out_chans:
-            self.shortcut = nn.Identity()
-        else:
-            self.shortcut = nn.Conv2d(in_chans, out_chans, kernel_size=1)
 
     def forward(self, x):
-        return self.shortcut(x) + self.act(self.bn(self.conv(x)))
+        return self.act(self.bn(self.conv(x)))
 
 
 class CAN(nn.Module):
@@ -58,8 +50,8 @@ class CAN(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, emb_dims=128):
         super().__init__()
-        self.pooling1 = nn.AdaptiveAvgPool2d(output_size=128)
-        self.pooling2 = nn.AdaptiveAvgPool2d(output_size=64)
+        self.pooling1 = nn.AdaptiveMaxPool2d(output_size=128)
+        self.pooling2 = nn.AdaptiveMaxPool2d(output_size=64)
         self.conv_block = nn.Sequential(
             ConvBlock(in_chans=1, out_chans=16, kernel_size=3, stride=2, padding=1),  # [16, 32, 32]
             ConvBlock(in_chans=16, out_chans=32, kernel_size=3, stride=2, padding=1), # [32, 16, 16]
@@ -68,13 +60,19 @@ class Discriminator(nn.Module):
         )
         self.fc1 = nn.Sequential(
             nn.Linear(4*4*emb_dims, 128),
+            nn.BatchNorm1d(128),
             nn.ReLU()
         )
         self.fc2 = nn.Sequential(
             nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
             nn.ReLU()
         )
-        self.fc3 = nn.Linear(64, 1)
+        self.fc3 = nn.Sequential(
+            nn.Linear(64, 1),
+            nn.Sigmoid()
+        )
+        
         
 
     def forward(self, x):

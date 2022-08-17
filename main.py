@@ -31,12 +31,12 @@ def get_args_parser():
     parser.add_argument('--emb-dim', type=int, default=512)  
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--warmup', type=int, default=5)
-    parser.add_argument('--n_critic', type=int, default=5)
+    parser.add_argument('--n_critic', type=int, default=1)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--alpha', type=float, default=10)
     parser.add_argument('--clip_value', type=float, default=0.5)
     parser.add_argument('--loss_alpha1', type=float, default=0.1)
-    parser.add_argument('--loss_alpha2', type=float, default=1)
+    parser.add_argument('--loss_alpha2', type=float, default=10)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--wd', type=float, default=1e-4, metavar='N', help='weight decay')
     parser.add_argument('--eval', action='store_true', default=False, help='Only for evaluation')
@@ -75,8 +75,8 @@ def main(args):
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-    G1 = CAN(dilation_factors=[1,2,4,8,4,2,1], in_chans=1, emb_dims=128)
-    G2 = CAN(dilation_factors=[1,2,4,8,16,8,4,2,1], in_chans=1, emb_dims=128)
+    G1 = CAN(dilation_factors=[1,2,4,8,4,2,1], in_chans=1, emb_dims=args.emb_dim)
+    G2 = CAN(dilation_factors=[1,2,4,8,16,8,4,2,1], in_chans=1, emb_dims=args.emb_dim)
     D = Discriminator(emb_dims=128)
     
     G1 = torch.nn.DataParallel(G1)
@@ -94,7 +94,7 @@ def main(args):
 
     optimizer_G1 = optim.Adam(G1.parameters(), lr=args.lr, weight_decay=args.wd)
     optimizer_G2 = optim.Adam(G2.parameters(), lr=args.lr, weight_decay=args.wd)
-    optimizer_D = optim.Adam(D.parameters(), lr=args.lr * 0.05, weight_decay=args.wd)
+    optimizer_D = optim.Adam(D.parameters(), lr=args.lr * 0.1, weight_decay=args.wd)
 
     # scheduler = utils.cosine_lr(optimizer_G1, args.lr, args.warmup, args.epochs)
 
@@ -105,8 +105,9 @@ def main(args):
         eval_stat = evaluate(testloader, G1, G2, device, args)
         print(eval_stat)
 
-        torch.save(G1, './checkpoints/G1_%i.pt'%epoch)
-        torch.save(G2, './checkpoints/G2_%i.pt'%epoch)
+        if (epoch+1) % 5 == 0:
+            torch.save(G1, './checkpoints/G1_%i.pt'%epoch)
+            torch.save(G2, './checkpoints/G2_%i.pt'%epoch)
 
 
 

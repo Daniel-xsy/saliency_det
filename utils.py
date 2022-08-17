@@ -23,7 +23,8 @@ class ConsistencyLoss(nn.Module):
         super().__init__()
         self.loss = nn.MSELoss()
     def forward(self, feat1, feat2):
-        return self.loss(feat1, feat2)
+        assert feat1.size() == feat2.size()
+        return self.loss(feat1, feat2) / feat1.size(-1)
     
 
 class DataLoss(nn.Module):
