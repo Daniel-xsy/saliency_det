@@ -30,7 +30,7 @@ if __name__=='__main__':
         try:
             x, y = train_dataset[i]
             train_x_file_list.append(train_dataset.x_files[i])
-            train_y_file_list.append(train_dataset.x_files[i])
+            train_y_file_list.append(train_dataset.y_files[i])
         except:
             pass
 
