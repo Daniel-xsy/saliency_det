@@ -29,11 +29,12 @@ def get_args_parser():
     # Train Setting
     parser.add_argument('--input-size', type=int, default=112) 
     parser.add_argument('--emb-dim', type=int, default=512)  
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--warmup', type=int, default=5)
     parser.add_argument('--n_critic', type=int, default=5)
-    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--alpha', type=float, default=10)
+    parser.add_argument('--clip_value', type=float, default=0.5)
     parser.add_argument('--loss_alpha1', type=float, default=0.1)
     parser.add_argument('--loss_alpha2', type=float, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
@@ -70,98 +71,42 @@ def main(args):
         test_dataset = SirstDataset(root=root, transform=transforms, target_transform=target_transforms)
 
     trainloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2)
-    testloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+    testloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     G1 = CAN(dilation_factors=[1,2,4,8,4,2,1], in_chans=1, emb_dims=128)
     G2 = CAN(dilation_factors=[1,2,4,8,16,8,4,2,1], in_chans=1, emb_dims=128)
     D = Discriminator(emb_dims=128)
+    
+    G1 = torch.nn.DataParallel(G1)
+    G2 = torch.nn.DataParallel(G2)
+    D = torch.nn.DataParallel(D)
 
     G1 = G1.to(device)
     G2 = G2.to(device)
     D = D.to(device)
 
     if args.eval:
-        eval_stat = evaluate(testloader, G1, G2, device)
+        eval_stat = evaluate(testloader, G1, G2, device, args)
         print(eval_stat)
         exit(0)
 
     optimizer_G1 = optim.Adam(G1.parameters(), lr=args.lr, weight_decay=args.wd)
     optimizer_G2 = optim.Adam(G2.parameters(), lr=args.lr, weight_decay=args.wd)
-    optimizer_D = optim.Adam(D.parameters(), lr=args.lr, weight_decay=args.wd)
+    optimizer_D = optim.Adam(D.parameters(), lr=args.lr * 0.05, weight_decay=args.wd)
 
-    # scheduler = utils.cosine_lr(optimizer, args.lr, args.warmup, args.epochs)
-
-    con_loss = utils.ConsistencyLoss()
-    data_loss = utils.DataLoss(alpha=args.alpha)
+    # scheduler = utils.cosine_lr(optimizer_G1, args.lr, args.warmup, args.epochs)
 
     for epoch in range(args.epochs):
 
-        G1.train()
-        G2.train()
-        D.train()
+        log_stat = train_one_epoch(G1, G2, D, trainloader, optimizer_D, optimizer_G1, optimizer_G2,device, epoch, args)
+        print(log_stat)
+        eval_stat = evaluate(testloader, G1, G2, device, args)
+        print(eval_stat)
 
-        loss_D_all = utils.AverageMeter()
-        loss_G_all = utils.AverageMeter()
-        loss_con = utils.AverageMeter()
-        loss_data = utils.AverageMeter() 
-        loss_totol = utils.AverageMeter()
-
-        for batch_id, data in tqdm(enumerate(trainloader), total=len(trainloader)):
-
-            img, target = data
-            batchsize = img.size(0)
-
-            img = img.to(device)
-            target = target.to(device)
-        
-            fake1 = G1(img)
-            fake2 = G2(img)
-            logits1, feat1 = D(fake1)
-            logits2, feat2 = D(fake2)
-            logits_gt, _ = D(target)
-
-            ## Train Discriminator
-            optimizer_D.zero_grad()
-
-            loss_D = torch.mean(logits1) + torch.mean(logits2) - torch.mean(logits_gt)
-            loss_D_all.update(loss_D, batchsize/args.batch_size)
-
-            loss_D.backward()
-            optimizer_D.step()
-
-            if batch_id % args.n_critic == 0:
-                ## Train Generator
-                optimizer_G1.zero_grad()
-                optimizer_G2.zero_grad()
-
-
-                loss_G = -(torch.mean(logits1) + torch.mean(logits2))
-                loss_c = args.loss_alpha1 * con_loss(feat1, feat2)
-                loss_d = args.loss_alpha2 * data_loss(fake1, fake2, target)
-
-                loss_all = loss_G + loss_c + loss_d
-
-                loss_G_all.update(loss_G.item(), batchsize/args.batch_size)
-                loss_con.update(loss_c.item(), batchsize/args.batch_size)
-                loss_data.update(loss_d.item(), batchsize/args.batch_size)
-                loss_totol.update(loss_all.item(), batchsize/args.batch_size)
-
-                loss_all.backward()
-                           
-                optimizer_G1.step()
-                optimizer_G2.step()
-
-        #eval_stat = evaluate(testloader, G1, G2, device)
-        #log_stat = dict(train_stat.items() + eval_stat.items())
-        #print(log_stat)
-
-        #if (epoch + 1) == args.epochs:
-        #    torch.save(model, './checkpoint.pt')
-        
-        print('[Epoch: %i/%i] loss_D: %f loss_G: %f loss_con: %f loss_data: %f loss_totol: %f' % 
-        (epoch, args.epochs, loss_D_all.avg, loss_G_all.avg, loss_con.avg, loss_data.avg, loss_totol.avg))
+        torch.save(G1, './checkpoints/G1_%i.pt'%epoch)
+        torch.save(G2, './checkpoints/G2_%i.pt'%epoch)
 
 
 

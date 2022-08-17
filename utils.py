@@ -36,7 +36,6 @@ class DataLoss(nn.Module):
         return loss_1 + loss_2
         
 
-
 def assign_learning_rate(param_group, new_lr):
     param_group["lr"] = new_lr
 
@@ -87,8 +86,8 @@ def calculateF1Measure(output_image,gt_image,thre):
     out_bin = output_image > thre
     gt_bin = gt_image > thre
 
-    recall = torch.sum(gt_bin * out_bin) / torch.max(1, torch.sum(gt_bin))
-    prec   = torch.sum(gt_bin * out_bin) / torch.max(1, torch.sum(out_bin))
-    F1 = 2 * recall * prec / torch.max(0.001, recall + prec)
+    recall = torch.sum(gt_bin * out_bin) / max(1, torch.sum(gt_bin))
+    prec   = torch.sum(gt_bin * out_bin) / max(1, torch.sum(out_bin))
+    F1 = 2 * recall * prec / max(0.001, recall + prec)
 
     return F1
