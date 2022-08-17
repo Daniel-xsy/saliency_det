@@ -31,10 +31,11 @@ def get_args_parser():
     parser.add_argument('--emb-dim', type=int, default=512)  
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--warmup', type=int, default=5)
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--n_critic', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--alpha', type=float, default=10)
-    parser.add_argument('--loss_alpha1', type=float, default=10)
-    parser.add_argument('--loss_alpha2', type=float, default=10)
+    parser.add_argument('--loss_alpha1', type=float, default=0.1)
+    parser.add_argument('--loss_alpha2', type=float, default=1)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--wd', type=float, default=1e-4, metavar='N', help='weight decay')
     parser.add_argument('--eval', action='store_true', default=False, help='Only for evaluation')
@@ -101,7 +102,11 @@ def main(args):
         G2.train()
         D.train()
 
-        train_loss = utils.AverageMeter()
+        loss_D_all = utils.AverageMeter()
+        loss_G_all = utils.AverageMeter()
+        loss_con = utils.AverageMeter()
+        loss_data = utils.AverageMeter() 
+        loss_totol = utils.AverageMeter()
 
         for batch_id, data in tqdm(enumerate(trainloader), total=len(trainloader)):
 
@@ -121,6 +126,8 @@ def main(args):
             optimizer_D.zero_grad()
 
             loss_D = torch.mean(logits1) + torch.mean(logits2) - torch.mean(logits_gt)
+            loss_D_all.update(loss_D, batchsize/args.batch_size)
+
             loss_D.backward()
             optimizer_D.step()
 
@@ -129,10 +136,20 @@ def main(args):
                 optimizer_G1.zero_grad()
                 optimizer_G2.zero_grad()
 
-                loss_G = -(torch.mean(logits1) + torch.mean(logits2)) + args.loss_alpha1 * con_loss(feat1, feat2) + \
-                           args.loss_alpha2 * data_loss(fake1, feat2, target)
 
-                loss_G.backward()
+                loss_G = -(torch.mean(logits1) + torch.mean(logits2))
+                loss_c = args.loss_alpha1 * con_loss(feat1, feat2)
+                loss_d = args.loss_alpha2 * data_loss(fake1, fake2, target)
+
+                loss_all = loss_G + loss_c + loss_d
+
+                loss_G_all.update(loss_G.item(), batchsize/args.batch_size)
+                loss_con.update(loss_c.item(), batchsize/args.batch_size)
+                loss_data.update(loss_d.item(), batchsize/args.batch_size)
+                loss_totol.update(loss_all.item(), batchsize/args.batch_size)
+
+                loss_all.backward()
+                           
                 optimizer_G1.step()
                 optimizer_G2.step()
 
@@ -143,6 +160,8 @@ def main(args):
         #if (epoch + 1) == args.epochs:
         #    torch.save(model, './checkpoint.pt')
         
+        print('[Epoch: %i/%i] loss_D: %f loss_G: %f loss_con: %f loss_data: %f loss_totol: %f' % 
+        (epoch, args.epochs, loss_D_all.avg, loss_G_all.avg, loss_con.avg, loss_data.avg, loss_totol.avg))
 
 
 
