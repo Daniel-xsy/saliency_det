@@ -1,5 +1,40 @@
+from turtle import forward
 import numpy as np
 import torch
+import torch.nn as nn
+
+
+def miss_detection_rate(output, target, thre=0.5):
+    out_bin = output > thre
+    gt_bin = target > thre
+    mdr = torch.sum(gt_bin * (1 - out_bin)) / torch.max(1, torch.sum(gt_bin))
+    return mdr
+
+
+def false_alarm_rate(output, target, thre=0.5):
+    out_bin = output > thre
+    gt_bin = target > thre
+    far = torch.sum((1 - gt_bin) * out_bin) / torch.max(1, torch.sum(out_bin))
+    return far
+
+
+class ConsistencyLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.loss = nn.MSELoss()
+    def forward(self, feat1, feat2):
+        return self.loss(feat1, feat2)
+    
+
+class DataLoss(nn.Module):
+    def __init__(self, alpha=10):
+        super().__init__()
+        self.alpha = alpha
+    def forward(self, fake1, fake2, gt):
+        loss_1 = self.alpha * miss_detection_rate(fake1, gt) + false_alarm_rate(fake1, gt)
+        loss_2 = miss_detection_rate(fake2, gt) + self.alpha * false_alarm_rate(fake2, gt)
+        return loss_1 + loss_2
+        
 
 
 def assign_learning_rate(param_group, new_lr):
@@ -52,8 +87,8 @@ def calculateF1Measure(output_image,gt_image,thre):
     out_bin = output_image > thre
     gt_bin = gt_image > thre
 
-    recall = torch.sum(gt_bin*out_bin) / torch.max(1, torch.sum(gt_bin))
-    prec   = torch.sum(gt_bin*out_bin) / torch.max(1, torch.sum(out_bin))
+    recall = torch.sum(gt_bin * out_bin) / torch.max(1, torch.sum(gt_bin))
+    prec   = torch.sum(gt_bin * out_bin) / torch.max(1, torch.sum(out_bin))
     F1 = 2 * recall * prec / torch.max(0.001, recall + prec)
 
     return F1

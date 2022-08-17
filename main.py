@@ -1,5 +1,6 @@
 import os
 import argparse
+from tqdm import tqdm
 import numpy as np
 
 import torch
@@ -9,7 +10,7 @@ import torchvision.transforms as tfs
 from torch.utils.data import DataLoader
 
 from dataset import DEFAULT_PATH, MDFADataset, SirstDataset
-from model import UNet
+from model import CAN, Discriminator
 from engine import train_one_epoch, evaluate
 import utils
 
@@ -31,6 +32,9 @@ def get_args_parser():
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--warmup', type=int, default=5)
     parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--alpha', type=float, default=10)
+    parser.add_argument('--loss_alpha1', type=float, default=10)
+    parser.add_argument('--loss_alpha2', type=float, default=10)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--wd', type=float, default=1e-4, metavar='N', help='weight decay')
     parser.add_argument('--eval', action='store_true', default=False, help='Only for evaluation')
@@ -69,28 +73,75 @@ def main(args):
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-    model = UNet(input_size=args.input_size, emb_dim=args.emb_dim)
-    model = model.to(device)
+    G1 = CAN(dilation_factors=[1,2,4,8,4,2,1], in_chans=1, emb_dims=128)
+    G2 = CAN(dilation_factors=[1,2,4,8,16,8,4,2,1], in_chans=1, emb_dims=128)
+    D = Discriminator(emb_dims=128)
+
+    G1 = G1.to(device)
+    G2 = G2.to(device)
+    D = D.to(device)
 
     if args.eval:
-        eval_stat = evaluate(testloader, model, device)
+        eval_stat = evaluate(testloader, G1, G2, device)
         print(eval_stat)
         exit(0)
 
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
-    scheduler = utils.cosine_lr(optimizer, args.lr, args.warmup, args.epochs)
-    criterion = nn.MSELoss()
+    optimizer_G1 = optim.Adam(G1.parameters(), lr=args.lr, weight_decay=args.wd)
+    optimizer_G2 = optim.Adam(G2.parameters(), lr=args.lr, weight_decay=args.wd)
+    optimizer_D = optim.Adam(D.parameters(), lr=args.lr, weight_decay=args.wd)
+
+    # scheduler = utils.cosine_lr(optimizer, args.lr, args.warmup, args.epochs)
+
+    con_loss = utils.ConsistencyLoss()
+    data_loss = utils.DataLoss(alpha=args.alpha)
 
     for epoch in range(args.epochs):
 
-        scheduler(epoch)
-        train_stat = train_one_epoch(model, criterion, trainloader, optimizer, device, epoch)
-        eval_stat = evaluate(testloader, model, device)
-        log_stat = dict(train_stat.items() + eval_stat.items())
-        print(log_stat)
+        G1.train()
+        G2.train()
+        D.train()
 
-        if (epoch + 1) == args.epochs:
-            torch.save(model, './checkpoint.pt')
+        train_loss = utils.AverageMeter()
+
+        for batch_id, data in tqdm(enumerate(trainloader), total=len(trainloader)):
+
+            img, target = data
+            batchsize = img.size(0)
+
+            img = img.to(device)
+            target = target.to(device)
+        
+            fake1 = G1(img)
+            fake2 = G2(img)
+            logits1, feat1 = D(fake1)
+            logits2, feat2 = D(fake2)
+            logits_gt, _ = D(target)
+
+            ## Train Discriminator
+            optimizer_D.zero_grad()
+
+            loss_D = torch.mean(logits1) + torch.mean(logits2) - torch.mean(logits_gt)
+            loss_D.backward()
+            optimizer_D.step()
+
+            if batch_id % args.n_critic == 0:
+                ## Train Generator
+                optimizer_G1.zero_grad()
+                optimizer_G2.zero_grad()
+
+                loss_G = -(torch.mean(logits1) + torch.mean(logits2)) + args.loss_alpha1 * con_loss(feat1, feat2) + \
+                           args.loss_alpha2 * data_loss(fake1, feat2, target)
+
+                loss_G.backward()
+                optimizer_G1.step()
+                optimizer_G2.step()
+
+        #eval_stat = evaluate(testloader, G1, G2, device)
+        #log_stat = dict(train_stat.items() + eval_stat.items())
+        #print(log_stat)
+
+        #if (epoch + 1) == args.epochs:
+        #    torch.save(model, './checkpoint.pt')
         
 
 

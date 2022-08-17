@@ -1,9 +1,94 @@
 
+from turtle import forward
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
+class ConvBlock(nn.Module):
+    def __init__(self, in_chans, out_chans, kernel_size, stride, padding):
+        super(ConvBlock, self).__init__()
+        # input and output the same size
+        self.conv = nn.Conv2d(in_chans, out_chans, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.bn = nn.BatchNorm2d(out_chans)
+        self.act = nn.LeakyReLU(negative_slope=0.2)
+        if in_chans == out_chans:
+            self.shortcut = nn.Identity()
+        else:
+            self.shortcut = nn.Conv2d(in_chans, out_chans, kernel_size, stride=stride, padding=padding)
+
+    def forward(self, x):
+        return self.shortcut(x) + self.act(self.bn(self.conv(x)))
+
+
+class CANBlock(nn.Module):
+    def __init__(self, in_chans, out_chans, dilation):
+        super(CANBlock, self).__init__()
+        # input and output the same size
+        self.conv = nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=dilation, dilation=dilation)
+        self.bn = nn.BatchNorm2d(out_chans)
+        self.act = nn.LeakyReLU(negative_slope=0.2)
+        if in_chans == out_chans:
+            self.shortcut = nn.Identity()
+        else:
+            self.shortcut = nn.Conv2d(in_chans, out_chans, kernel_size=1)
+
+    def forward(self, x):
+        return self.shortcut(x) + self.act(self.bn(self.conv(x)))
+
+
+class CAN(nn.Module):
+    def __init__(self, dilation_factors, in_chans, emb_dims):
+        super().__init__()
+        layers = []
+        for i in range(len(dilation_factors)):
+            if i == 0:
+                layers.append(CANBlock(in_chans, emb_dims, dilation_factors[i]))
+            else:
+                layers.append(CANBlock(emb_dims, emb_dims, dilation_factors[i]))
+
+        self.blocks = nn.Sequential(*layers)
+        self.linear_head = nn.Conv2d(emb_dims, in_chans, kernel_size=1)
+
+    def forward(self, x):
+        x = self.blocks(x)
+        x = self.linear_head(x)
+        return x
+
+class Discriminator(nn.Module):
+    def __init__(self, emb_dims=128):
+        super().__init__()
+        self.pooling1 = nn.AdaptiveAvgPool2d(output_size=128)
+        self.pooling2 = nn.AdaptiveAvgPool2d(output_size=64)
+        self.conv_block = nn.Sequential(
+            ConvBlock(in_chans=1, out_chans=16, kernel_size=3, stride=2, padding=1),  # [16, 32, 32]
+            ConvBlock(in_chans=16, out_chans=32, kernel_size=3, stride=2, padding=1), # [32, 16, 16]
+            ConvBlock(in_chans=32, out_chans=64, kernel_size=3, stride=2, padding=1), # [64, 8, 8]
+            ConvBlock(in_chans=64, out_chans=emb_dims, kernel_size=3, stride=2, padding=1), # [emb_dims, 4, 4]
+        )
+        self.fc1 = nn.Sequential(
+            nn.Linear(4*4*emb_dims, 128),
+            nn.ReLU()
+        )
+        self.fc2 = nn.Sequential(
+            nn.Linear(128, 64),
+            nn.ReLU()
+        )
+        self.fc3 = nn.Linear(64, 1)
+        
+
+    def forward(self, x):
+        x = self.pooling2(self.pooling1(x))
+        x = self.conv_block(x)
+        x = x.flatten(1,3)
+        feat = x
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.fc3(x)
+
+        return x, feat
+
+"""
 class Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
         super().__init__()
@@ -127,7 +212,4 @@ class UNet(nn.Module):
         x = self.decoder_4(x)
 
         return x
-
-
-
-    
+"""
