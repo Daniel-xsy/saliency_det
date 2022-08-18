@@ -35,7 +35,7 @@ def get_args_parser():
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--alpha', type=float, default=10)
     parser.add_argument('--clip_value', type=float, default=0.5)
-    parser.add_argument('--loss_alpha1', type=float, default=0.1)
+    parser.add_argument('--loss_alpha1', type=float, default=100)
     parser.add_argument('--loss_alpha2', type=float, default=10)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--wd', type=float, default=1e-4, metavar='N', help='weight decay')
@@ -94,11 +94,13 @@ def main(args):
 
     optimizer_G1 = optim.Adam(G1.parameters(), lr=args.lr, weight_decay=args.wd)
     optimizer_G2 = optim.Adam(G2.parameters(), lr=args.lr, weight_decay=args.wd)
-    optimizer_D = optim.Adam(D.parameters(), lr=args.lr * 0.1, weight_decay=args.wd)
+    optimizer_D = optim.Adam(D.parameters(), lr=args.lr * 0.01)
 
-    # scheduler = utils.cosine_lr(optimizer_G1, args.lr, args.warmup, args.epochs)
+    scheduler = utils.cosine_lr(optimizer_G1, args.lr, args.warmup, args.epochs)
 
     for epoch in range(args.epochs):
+
+        scheduler(epoch)
 
         log_stat = train_one_epoch(G1, G2, D, trainloader, optimizer_D, optimizer_G1, optimizer_G2,device, epoch, args)
         print(log_stat)

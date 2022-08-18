@@ -40,7 +40,11 @@ class CAN(nn.Module):
                 layers.append(CANBlock(emb_dims, emb_dims, dilation_factors[i]))
 
         self.blocks = nn.Sequential(*layers)
-        self.linear_head = nn.Conv2d(emb_dims, in_chans, kernel_size=1)
+        self.linear_head = nn.Sequential(
+            nn.Conv2d(emb_dims, in_chans, kernel_size=1),
+            nn.Sigmoid()
+        )
+        
 
     def forward(self, x):
         x = self.blocks(x)

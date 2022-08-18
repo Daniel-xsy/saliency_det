@@ -1,9 +1,9 @@
 python main.py \
     --input-size 112 \
-    --emb-dim 128 \
-    --epochs 20 \
-    --warmup 3 \
+    --emb-dim 256 \
+    --epochs 30 \
+    --warmup 5 \
     --batch_size 32 \
-    --lr 1e-4 \
-    --wd 0 \
-    --n_critic 1 \
+    --lr 4e-4 \
+    --wd 5e-2 \
+    --n_critic 10 \

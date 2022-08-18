@@ -5,16 +5,11 @@ import torch.nn.functional as F
 
 
 def miss_detection_rate(output, target):
-    output = output * target
-    mdr = torch.sum(1 - output) / max(1, torch.sum(target))
-    return mdr
+    return torch.sum((1 - output) * target) / max(1, torch.sum(target))
 
 
 def false_alarm_rate(output, target):
-    no_object_mask = 1 - target
-    output = output * no_object_mask
-    far = torch.sum(output) / max(1, torch.sum(1 - target))
-    return far
+    return torch.sum(output * (1 - target)) / max(1, torch.sum(1 - target))
 
 
 class ConsistencyLoss(nn.Module):

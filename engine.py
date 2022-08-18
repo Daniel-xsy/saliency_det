@@ -32,49 +32,47 @@ def train_one_epoch(G1: torch.nn.Module, G2: torch.nn.Module, D: torch.nn.Module
 
         img = img.to(device)
         target = target.to(device)
-    
+
+        ## Train Generator
+        optimizer_G1.zero_grad()
+        optimizer_G2.zero_grad()
+
         fake1 = G1(img)
         fake2 = G2(img)
         logits1, feat1 = D(fake1)
         logits2, feat2 = D(fake2)
         logits_gt, _ = D(target)
 
-        ## Train Discriminator
-        optimizer_D.zero_grad()
+        loss_G = args.loss_alpha2 * torch.mean(1 - torch.log(logits1) + 1 - torch.log(logits2))
+        loss_c = con_loss(feat1, feat2)
+        loss_d = args.loss_alpha1 * data_loss(fake1, fake2, target)
 
-        loss_D = torch.mean(torch.log(logits1)) + torch.mean(torch.log(logits2)) - torch.mean(torch.log(logits_gt))
-        loss_D_all.update(loss_D.item(), batchsize/args.batch_size)
+        loss_all = loss_G + loss_c + loss_d
 
-        loss_D.backward()
-        optimizer_D.step()
+        loss_G_all.update(loss_G.item(), batchsize/args.batch_size)
+        loss_con.update(loss_c.item(), batchsize/args.batch_size)
+        loss_data.update(loss_d.item(), batchsize/args.batch_size)
+        loss_totol.update(loss_all.item(), batchsize/args.batch_size)
+
+        loss_all.backward()
+                    
+        optimizer_G1.step()
+        optimizer_G2.step()
 
         if batch_id % args.n_critic == 0:
-            ## Train Generator
+            ## Train Discriminator
+            optimizer_D.zero_grad()
             
-            fake1 = G1(img)
-            fake2 = G2(img)
-            logits1, feat1 = D(fake1)
-            logits2, feat2 = D(fake2)
+            logits1, feat1 = D(G1(img))
+            logits2, feat2 = D(G2(img))
             logits_gt, _ = D(target)
             
-            optimizer_G1.zero_grad()
-            optimizer_G2.zero_grad()
+            loss_D = torch.mean(torch.log(logits1) + torch.log(logits2) - torch.log(logits_gt))
+            loss_D_all.update(loss_D.item(), batchsize/args.batch_size)
 
-            loss_G = args.loss_alpha2 * torch.mean(1 - torch.log(logits1) + 1 - torch.log(logits2))
-            loss_c = con_loss(feat1, feat2)
-            loss_d = args.loss_alpha1 * data_loss(fake1, fake2, target)
+            loss_D.backward()
+            optimizer_D.step()
 
-            loss_all = loss_G + loss_c + loss_d
-
-            loss_G_all.update(loss_G.item(), batchsize/args.batch_size)
-            loss_con.update(loss_c.item(), batchsize/args.batch_size)
-            loss_data.update(loss_d.item(), batchsize/args.batch_size)
-            loss_totol.update(loss_all.item(), batchsize/args.batch_size)
-
-            loss_all.backward()
-                        
-            optimizer_G1.step()
-            optimizer_G2.step()
             
         if batch_id % 20 == 0:
             f1_score = utils.calculateF1Measure((fake2 + fake1 / 2), target, 0.5)
