@@ -28,7 +28,7 @@ def get_args_parser():
     
     # Eval Setting
     parser.add_argument('--emb-dim', type=int, default=512)  
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--model1_ckp', type=str, default='checkpoints/G1_29.pt')
     parser.add_argument('--model2_ckp', type=str, default='checkpoints/G2_29.pt')
    
@@ -68,7 +68,7 @@ def main(args):
     model1 = model1.to(device)
     model2 = model2.to(device)
 
-    eval_stat = evaluate(testloader, model1, model1, device, args)
+    eval_stat = evaluate(testloader, model2, model2, device, args)
     print(eval_stat)
 
 
