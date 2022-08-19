@@ -92,6 +92,8 @@ def evaluate(data_loader, model1, model2,  device, args):
     model1.eval()
     model2.eval()
     f1_score = utils.AverageMeter()
+    recall = utils.AverageMeter()
+    prec = utils.AverageMeter()
 
     for batch_id, data in enumerate(data_loader):
 
@@ -104,7 +106,12 @@ def evaluate(data_loader, model1, model2,  device, args):
         output1 = model1(img)
         output2 = model2(img)
         output = (output1 + output2) / 2
-        f1_score.update(utils.calculateF1Measure(output, target, 0.5), batchsize/args.batch_size)
+        f1_score_, recall_, prec_ = utils.calculateF1Measure(output, target, 0.5)
+        f1_score.update(f1_score_, batchsize/args.batch_size)
+        recall.update(recall_, batchsize/args.batch_size)
+        prec.update(prec_, batchsize/args.batch_size)
+        
+        # print('[%i/%i] average: f1_score: %f' % (batch_id, len(data_loader), f1_score.avg))
         
 
-    return {'F1_score': f1_score.avg}
+    return {'F1_score': f1_score.avg, 'recall': recall.avg, 'precision': prec.avg}
