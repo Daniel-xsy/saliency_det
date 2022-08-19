@@ -74,7 +74,11 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
         
 
-def calculateF1Measure(output_image,gt_image,thre):
+def calculateF1Measure(output_image, gt_image, thre):
+
+    if not output_image.size() == gt_image.size():
+        output_image = F.interpolate(output_image, size=gt_image.size()[-2:], mode='bilinear', align_corners=False)
+    
     output_image = torch.squeeze(output_image)
     gt_image = torch.squeeze(gt_image)
 
@@ -85,4 +89,4 @@ def calculateF1Measure(output_image,gt_image,thre):
     prec   = torch.sum(gt_bin * out_bin) / max(1, torch.sum(out_bin))
     F1 = 2 * recall * prec / max(0.001, recall + prec)
 
-    return F1
+    return F1, recall, prec
