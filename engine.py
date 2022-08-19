@@ -75,7 +75,7 @@ def train_one_epoch(G1: torch.nn.Module, G2: torch.nn.Module, D: torch.nn.Module
 
             
         if batch_id % 20 == 0:
-            f1_score = utils.calculateF1Measure((fake2 + fake1 / 2), target, 0.5)
+            f1_score, _, _ = utils.calculateF1Measure((fake2 + fake1 / 2), target, 0.5)
             print('[Iteration %i/%i] loss_G: %f loss_D: %f loss_con: %f loss_data: %f loss_total: %f f1 score %f' % 
                   (batch_id, len(data_loader), loss_G_all.avg, loss_D_all.avg, loss_con.avg, loss_data.avg, loss_totol.avg, f1_score))
 
