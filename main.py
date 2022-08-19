@@ -10,7 +10,7 @@ import torchvision.transforms as tfs
 from torch.utils.data import DataLoader
 
 from dataset import DEFAULT_PATH, MDFADataset, SirstDataset
-from model import CAN, Discriminator
+from model import CAN, Discriminator, AttentionBlock
 from engine import train_one_epoch, evaluate
 import utils
 
@@ -29,6 +29,8 @@ def get_args_parser():
     # Train Setting
     parser.add_argument('--input-size', type=int, default=112) 
     parser.add_argument('--emb-dim', type=int, default=512)  
+    parser.add_argument('--attn-dim', type=int, default=256)  
+    parser.add_argument('--out-dim', type=int, default=64)  
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--warmup', type=int, default=5)
     parser.add_argument('--n_critic', type=int, default=1)
@@ -75,8 +77,11 @@ def main(args):
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-    G1 = CAN(dilation_factors=[1,2,4,8,4,2,1], in_chans=1, emb_dims=args.emb_dim)
-    G2 = CAN(dilation_factors=[1,2,4,8,16,8,4,2,1], in_chans=1, emb_dims=args.emb_dim)
+    attn1 = AttentionBlock(args.attn_dim, args.out_dim)
+    attn2 = AttentionBlock(args.attn_dim, args.out_dim)
+
+    G1 = CAN(attention=attn1, dilation_factors=[1,2,4,8,4,2,1], attn_dims=args.out_dim, in_chans=1, emb_dims=args.emb_dim)
+    G2 = CAN(attention=attn2, dilation_factors=[1,2,4,8,16,8,4,2,1], attn_dims=args.out_dim, in_chans=1, emb_dims=args.emb_dim)
     D = Discriminator(emb_dims=128)
     
     G1 = torch.nn.DataParallel(G1)

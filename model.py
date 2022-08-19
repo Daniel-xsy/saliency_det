@@ -1,8 +1,62 @@
 
-from turtle import forward
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+
+class Attention(nn.Module):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
+        super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.scale = head_dim ** -0.5
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x):
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
+
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+
+class AttentionBlock(nn.Module):
+    def __init__(self, attn_dim, output_dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0., patch_size=16):
+        super(AttentionBlock, self).__init__()
+        self.conv = nn.Conv2d(1, attn_dim, kernel_size=patch_size, stride=patch_size)
+        self.ln = nn.LayerNorm(attn_dim)
+        self.attn = Attention(attn_dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=proj_drop)
+        self.ffn = nn.Sequential(
+            nn.Linear(attn_dim, output_dim),
+            nn.BatchNorm1d(output_dim),
+            nn.LeakyReLU()
+        )
+        
+    def forward(self, x):
+        B, C, H, W = x.size()
+        x = self.conv(x)
+        _, C, H_, W_ = x.size()
+        
+        x = x.flatten(2, 3).permute(0, 2, 1) # [B, C, H, W] => [B, N, C]
+        x += self.attn(self.ln(x)) 
+        x = self.ffn(x)
+        x = x.permute(0, 2, 1) # [B, N, C] => [B, C, N]
+        
+        x = x.reshape(B, C, H_, W_)
+        x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
+        return x
 
 
 class ConvBlock(nn.Module):
@@ -30,15 +84,16 @@ class CANBlock(nn.Module):
 
 
 class CAN(nn.Module):
-    def __init__(self, dilation_factors, in_chans, emb_dims):
+    def __init__(self, attention, dilation_factors, attn_dims, in_chans, emb_dims):
         super().__init__()
         layers = []
         for i in range(len(dilation_factors)):
             if i == 0:
-                layers.append(CANBlock(in_chans, emb_dims, dilation_factors[i]))
+                layers.append(CANBlock(in_chans + attn_dims, emb_dims, dilation_factors[i]))
             else:
                 layers.append(CANBlock(emb_dims, emb_dims, dilation_factors[i]))
 
+        self.attention = attention
         self.blocks = nn.Sequential(*layers)
         self.linear_head = nn.Sequential(
             nn.Conv2d(emb_dims, in_chans, kernel_size=1),
@@ -47,9 +102,12 @@ class CAN(nn.Module):
         
 
     def forward(self, x):
+        attn = self.attention(x)
+        x = torch.cat((x, attn), dim=1)
         x = self.blocks(x)
         x = self.linear_head(x)
         return x
+
 
 class Discriminator(nn.Module):
     def __init__(self, emb_dims=128):
@@ -88,6 +146,7 @@ class Discriminator(nn.Module):
         x = self.fc3(x)
 
         return x, feat
+
 
 """
 class Attention(nn.Module):
