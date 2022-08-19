@@ -40,21 +40,20 @@ class AttentionBlock(nn.Module):
         self.attn = Attention(attn_dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=proj_drop)
         self.ffn = nn.Sequential(
             nn.Linear(attn_dim, output_dim),
-            nn.BatchNorm1d(output_dim),
             nn.LeakyReLU()
         )
         
     def forward(self, x):
-        B, C, H, W = x.size()
+        B, _, H, W = x.size()
         x = self.conv(x)
-        _, C, H_, W_ = x.size()
+        _, _, H_, W_ = x.size()
         
         x = x.flatten(2, 3).permute(0, 2, 1) # [B, C, H, W] => [B, N, C]
-        x += self.attn(self.ln(x)) 
+        x = x + self.attn(self.ln(x)) 
         x = self.ffn(x)
         x = x.permute(0, 2, 1) # [B, N, C] => [B, C, N]
         
-        x = x.reshape(B, C, H_, W_)
+        x = x.reshape(B, -1, H_, W_)
         x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=False)
         return x
 
